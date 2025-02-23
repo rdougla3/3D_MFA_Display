@@ -1,2 +1,2 @@
 # 3D_MFA_Display
-Monitors an IMAP account for multifactor authentication codes and displays them on the console.
+Python script that monitors a push IMAP account for multifactor authentication (MFA) codes and displays them on the console.
