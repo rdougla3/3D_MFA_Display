@@ -93,8 +93,14 @@ class Idler(object):
             # solution.
             if self.needsync:
                 self.event.clear()
-                self.dosync()
- 
+                try:
+                    self.dosync()
+                except Exception as e:
+                    print(f"Error occurred while fetching MFA code from email: {e}")
+                    # Optionally print a stack trace for more details
+                    # import traceback
+                    # traceback.print_exc()
+
     # The method that gets called when a new email arrives. 
     # Replace it with something better.
     def dosync(self):
