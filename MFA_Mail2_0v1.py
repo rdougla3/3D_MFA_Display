@@ -162,10 +162,10 @@ class Idler(object):
                 # print(message["Subject"])
 
             for part in message.walk():
-                print("Content type is: ", part.get_content_type())
+                # print("Content type is: ", part.get_content_type())
                 # print ("\n\nPART:\n",part,"\n\n")
-                print("\n\n",message,"\n\n")
-                if part.get_content_type() == "text/plain":
+                # print("\n\n",message,"\n\n")
+                if part.get_content_type() == "text/html":
                     body = part.as_string()
                     
                     # get date and time
