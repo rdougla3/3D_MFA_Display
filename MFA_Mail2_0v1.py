@@ -15,6 +15,7 @@ import ssl
 import socket
 import os
 from html.parser import HTMLParser
+import re
 
 # Configurable delay and max timeout between reconnection attempts if network fails or IMAP server disconnects
 RETRY_DELAY_SECONDS = 30
@@ -36,10 +37,12 @@ class StripHTML(HTMLParser):
     def get_text(self):
         return ''.join(self.result)
 
+
 def strip_html(text):
     remover = StripHTML()
     remover.feed(text)
     return remover.get_text()
+
 
 #
 #
@@ -50,7 +53,7 @@ def strip_html(text):
 #
 
 #
-# This is the threading object that does all the waiting on 
+# This is the threading object that does all the waiting on
 # the event
 #
 class Idler(object):
@@ -58,46 +61,48 @@ class Idler(object):
         self.thread = Thread(target=self.idle)
         self.M = conn
         self.event = Event()
- 
+
     def start(self):
         self.thread.start()
- 
+
     def stop(self):
-        # This is a neat trick to make thread end. Took me a 
+        # This is a neat trick to make thread end. Took me a
         # while to figure that one out!
         self.event.set()
- 
+
     def join(self):
         self.thread.join()
- 
+
     def idle(self):
         # Do an initial sync on startup
         self.dosync_wrapper()
 
         # Starting an unending loop here
         while True:
-            # This is part of the trick to make the loop stop 
+            # This is part of the trick to make the loop stop
             # when the stop() command is given
             if self.event.is_set():
                 return
             self.needsync = False
-            # A callback method that gets called when a new 
+
+            # A callback method that gets called when a new
             # email arrives. Very basic, but that's good.
             def callback(args):
                 if not self.event.is_set():
                     self.needsync = True
                     self.event.set()
-            # Do the actual idle call. This returns immediately, 
+
+            # Do the actual idle call. This returns immediately,
             # since it's asynchronous.
             self.M.idle(callback=callback)
-            # This waits until the event is set. The event is 
-            # set by the callback, when the server 'answers' 
-            # the idle call and the callback function gets 
+            # This waits until the event is set. The event is
+            # set by the callback, when the server 'answers'
+            # the idle call and the callback function gets
             # called.
             self.event.wait()
             # Because the function sets the needsync variable,
-            # this helps escape the loop without doing 
-            # anything if the stop() is called. Kinda neat 
+            # this helps escape the loop without doing
+            # anything if the stop() is called. Kinda neat
             # solution.
             if self.needsync:
                 self.event.clear()
@@ -108,7 +113,7 @@ class Idler(object):
     # needing duplicate error handling logic.
     def dosync_wrapper(self):
         try:
-            self.dosync()
+            self.dosync2()
         except (imaplib2.IMAP4.abort, imaplib2.IMAP4.error, socket.error) as conn_error:
             print(f"Error occurred while fetching MFA code from email: {conn_error}")
             print("Attempting to reconnect...")
@@ -119,17 +124,18 @@ class Idler(object):
                 global M
                 M = new_conn
                 try:
-                    self.dosync()
+                    self.dosync2()
                 except Exception as e:
-                    print(f"Another error occurred while fetching MFA code after reconnecting: {e}\n\nWill retry again later.")
+                    print(
+                        f"Another error occurred while fetching MFA code after reconnecting: {e}\n\nWill retry again later.")
                     pass
             except Exception as e:
                 print("Failed to reconnect:", e)
- 
-    # The method that gets called when a new email arrives. 
+
+    # The method that gets called when a new email arrives.
     # Replace it with something better.
     def dosync(self):
-        os.system('clear') 
+        os.system('cls' if os.name == 'nt' else 'clear')
         print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*\n")
         time.sleep(.2)
         # print ("Got an event!")
@@ -139,7 +145,7 @@ class Idler(object):
         # int(mail_count[0]) converts this to a useful printable value
 
         # print(source_folder," mail count: ",int(mail_count[0]),"\n")
-        
+
         # import random
         # if random.random() < 0.3:
         #     print("!!! Randomly closing connection inside dosync to test error handling and reconnect !!!")
@@ -149,15 +155,15 @@ class Idler(object):
         resp_code, mails = M.search(None,'FROM','"Bambu Lab"')
         # resp_code, mails = M.search(None,"ALL")
 
-        # If zero, not all matching criteria are met.  
-        if len(mails[0])>0:
+        # If zero, not all matching criteria are met.
+        if len(mails[0]) > 0:
             # print("resp: ",mails[0][-1],"\n")
             # print ("\n\n",type(mails),"\n\n")
             # print ("\n\n",mails,"\n\n")
 
             for mail_id in mails[0].decode().split()[-800:]:
-                resp_code, mail_data = M.fetch(mail_id, '(RFC822)') ## Fetch mail data.
-                message = email.message_from_bytes(mail_data[0][1]) ## Construct Message from mail data
+                resp_code, mail_data = M.fetch(mail_id, '(RFC822)')  ## Fetch mail data.
+                message = email.message_from_bytes(mail_data[0][1])  ## Construct Message from mail data
                 # print ("\n\nMessage:\n",message,"\n\n")
                 # print(message["Subject"])
 
@@ -167,17 +173,17 @@ class Idler(object):
                 # print("\n\n",message,"\n\n")
                 if part.get_content_type() == "text/html":
                     body = part.as_string()
-                    
+
                     # get date and time
                     dateTimeStart = body.find("Delivery-date: ")
-                    dateTime = body[dateTimeStart+20 : body.find("\n",dateTimeStart) ]
-                    print("Date and Time: ",dateTime,"\n")
-                    msgTime = time.strptime(dateTime,"%d %b %Y %H:%M:%S %z")
+                    dateTime = body[dateTimeStart + 20: body.find("\n", dateTimeStart)]
+                    print("Date and Time: ", dateTime, "\n")
+                    msgTime = time.strptime(dateTime, "%d %b %Y %H:%M:%S %z")
                     # print ("Message time: ",msgTime,"\n")
                     # print ("Type: ",type(msgTime),"\n")
-                    
+
                     # print("Time Zone: ",time.strftime("%d %b %Y %H:%M:%S %z",msgTime),"\n")
-                    
+
                     textStart = body.find("<tbody>")
                     textEnd = body.find("</tbody>")
                     # print("\nSTART:",textStart," END: ",textEnd,"\n\n")
@@ -185,17 +191,46 @@ class Idler(object):
                     # this is hackage to parse for the MFA Code that needs ceaned up and commented.
                     # it's also too reliant on a fixed message format for my taste
 
-                    #   remove excess whitespace and replace with spaces                    
+                    #   remove excess whitespace and replace with spaces
                     text = " ".join(strip_html(body[textStart:textEnd]).split())
-                    
-                    code = text[text.find("verification code is: ")+22:text.find("verification code is: ")+22+6]
-                    print("\n\n\n\n\nCODE: ",code,"\n\n")
 
-                    print("\n\n\n\n\n\n BODY: "," ".join(strip_html(body[textStart:textEnd]).split()),"\n\n")
-                    
+                    code = text[text.find("verification code is: ") + 22:text.find("verification code is: ") + 22 + 6]
+                    print("\n\n\n\n\nCODE: ", code, "\n\n")
+
+                    print("\n\n\n\n\n\n BODY: ", " ".join(strip_html(body[textStart:textEnd]).split()), "\n\n")
 
                     # print("\n\n\n\nDUn Dun Dun \n")
                     print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*\n")
+
+    # chooses the last email instead of iterating through all the matches
+    def dosync2(self):
+        os.system('cls' if os.name == 'nt' else 'clear')
+        print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*\n")
+        time.sleep(.2)
+
+        resp_code, mails = M.search(None, 'FROM', '"Bambu Lab"')
+        # If zero, not all matching criteria are met.
+        if len(mails[0]) > 0:
+            dat = mails[0].decode().split()[-800:]
+            mail_id = dat[len(dat) - 1]
+            resp_code, mail_data = M.fetch(mail_id, '(RFC822)')  ## Fetch mail data.
+            message = email.message_from_bytes(mail_data[0][1]).as_string()  ## Construct Message from mail data
+
+            date = re.search("\\d\\d\\s[A-Za-z]a[A-Za-z]\\s[0-9]+\\s\\d\\d:\\d\\d:\\d\\d\\s-\\d\\d\\d\\d",
+                             message).group()
+            msgTime = time.strptime(date, "%d %b %Y %H:%M:%S %z")
+
+            codeStr = re.search("Your verification code is:\\s+\\d\\d\\d\\d\\d\\d", message).group()
+            code = re.search("\\d\\d\\d\\d\\d\\d", codeStr).group()
+
+            # I don't think we need this, just keeping the behavior consistent with v1. It avoids the markup by looking for new lines.
+            body = re.search('Welcome to Bambu Lab,\\n([\\s\\S]*)\\nBambu Lab', message).group()
+
+            os.system('cls' if os.name == 'nt' else 'clear')
+            print("\n\n\n\n\nCODE: ", code, "\n\n")
+            print("\n\n\n\n\n\n BODY: ", body, "\n\n")
+            print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*\n")
+
 
 # Creates a connection to the configured IMAP server
 def connect_imap():
@@ -209,7 +244,7 @@ def connect_imap():
             M = new_M
             return new_M
         except (imaplib2.IMAP4.abort, imaplib2.IMAP4.error, socket.error) as e:
-            print(f"Attempt {attempt+1} failed: {e}")
+            print(f"Attempt {attempt + 1} failed: {e}")
             if attempt < MAX_RETRIES - 1:
                 time.sleep(RETRY_DELAY_SECONDS)
             else:
@@ -242,13 +277,13 @@ USERNAME = config['DEFAULT']['USER']
 PASSWORD = config['DEFAULT']['PASS']
 source_folder = "INBOX"
 
-os.system('clear')
+os.system('cls' if os.name == 'nt' else 'clear')
 print("HOST: ", HOST)
 
 M = None
 idler = None
 
-# Had to do this stuff in a try-finally, since some testing 
+# Had to do this stuff in a try-finally, since some testing
 # went a little wrong.....
 try:
     print("Connecting to email server...")
@@ -256,7 +291,7 @@ try:
     M = connect_imap()
     idler = Idler(M)
     idler.start()
-    
+
     # Main program loop. Press Ctrl+C to exit.
     while True:
         time.sleep(1)
