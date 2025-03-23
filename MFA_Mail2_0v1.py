@@ -163,75 +163,6 @@ class Idler(object):
             except Exception as e:
                 print("Failed to reconnect:", e)
 
-    def dosync(self):
-        os.system('cls' if os.name == 'nt' else 'clear')
-        print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*\n")
-        time.sleep(.2)
-        # print ("Got an event!")
-        resp_code, mail_count = M.select(mailbox=source_folder, readonly=False)
-
-        # mail_count is returned a single element list with a binary value of the count
-        # int(mail_count[0]) converts this to a useful printable value
-
-        # print(source_folder," mail count: ",int(mail_count[0]),"\n")
-
-        # import random
-        # if random.random() < 0.3:
-        #     print("!!! Randomly closing connection inside dosync to test error handling and reconnect !!!")
-        #     M.close()
-
-        # resp_code, mails = M.search(None,"UNSEEN",'FROM','"Bambu Lab"')
-        resp_code, mails = M.search(None,'FROM','"Bambu Lab"')
-        # resp_code, mails = M.search(None,"ALL")
-
-        # If zero, not all matching criteria are met.
-        if len(mails[0]) > 0:
-            # print("resp: ",mails[0][-1],"\n")
-            # print ("\n\n",type(mails),"\n\n")
-            # print ("\n\n",mails,"\n\n")
-
-            for mail_id in mails[0].decode().split()[-800:]:
-                resp_code, mail_data = M.fetch(mail_id, '(RFC822)')  ## Fetch mail data.
-                message = email.message_from_bytes(mail_data[0][1])  ## Construct Message from mail data
-                # print ("\n\nMessage:\n",message,"\n\n")
-                # print(message["Subject"])
-
-            for part in message.walk():
-                # print("Content type is: ", part.get_content_type())
-                # print ("\n\nPART:\n",part,"\n\n")
-                # print("\n\n",message,"\n\n")
-                if part.get_content_type() == "text/html":
-                    body = part.as_string()
-
-                    # get date and time
-                    dateTimeStart = body.find("Delivery-date: ")
-                    dateTime = body[dateTimeStart + 20: body.find("\n", dateTimeStart)]
-                    print("Date and Time: ", dateTime, "\n")
-#                    msgTime = time.strptime(dateTime, "%d %b %Y %H:%M:%S %z")
-                    # print ("Message time: ",msgTime,"\n")
-                    # print ("Type: ",type(msgTime),"\n")
-
-                    # print("Time Zone: ",time.strftime("%d %b %Y %H:%M:%S %z",msgTime),"\n")
-
-                    textStart = body.find("<tbody>")
-                    textEnd = body.find("</tbody>")
-                    # print("\nSTART:",textStart," END: ",textEnd,"\n\n")
-
-                    # this is hackage to parse for the MFA Code that needs ceaned up and commented.
-                    # it's also too reliant on a fixed message format for my taste
-
-                    #   remove excess whitespace and replace with spaces
-                    text = " ".join(strip_html(body[textStart:textEnd]).split())
-
-                    code = text[text.find("verification code is: ") + 22:text.find("verification code is: ") + 22 + 6]
-                    print("\n\n\n\n\nCODE: ", code, "\n\n")
-
-                    print("\n\n\n\n\n\n BODY: ", " ".join(strip_html(body[textStart:textEnd]).split()), "\n\n")
-
-                    # print("\n\n\n\nDUn Dun Dun \n")
-                    print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*\n")
-
-
     def dosync2(self):
         time.sleep(.2)
         resp_code, mails = M.search(None, 'FROM', '"Ross Douglas"')
@@ -246,7 +177,7 @@ class Idler(object):
                 messages = email.message_from_bytes(mail_data[0][1]).as_string()
                 message = messages.split("Content-Type: text/plain").pop()
             except:
-                #message not ready
+                #message not ready. This shouldn't throw loops, but we can add a break condition
                 time.sleep(1)
                 return self.dosync2()
 
