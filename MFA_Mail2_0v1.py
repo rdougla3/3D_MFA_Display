@@ -164,7 +164,7 @@ class Idler(object):
 
     def dosync2(self):
         time.sleep(.2)
-        resp_code, mails = M.search(None, 'FROM', '"Ross Douglas"')
+        resp_code, mails = M.search(None, 'FROM', '"Bambu Lab"')
         # If zero, not all matching criteria are met.
         if len(mails[0]) > 0:
             #Most recent email
