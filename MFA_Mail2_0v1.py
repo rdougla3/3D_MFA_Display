@@ -91,7 +91,6 @@ class Idler(object):
         self.thread = Thread(target=self.idle)
         self.M = conn
         self.event = Event()
-        notificationStack = FixedStack([])
 
     def start(self):
         self.thread.start()
@@ -144,7 +143,7 @@ class Idler(object):
     # needing duplicate error handling logic.
     def dosync_wrapper(self):
         try:
-            self.dosync2()
+            self.dosync()
         except (imaplib2.IMAP4.abort, imaplib2.IMAP4.error, socket.error) as conn_error:
             print(f"Error occurred while fetching MFA code from email: {conn_error}")
             print("Attempting to reconnect...")
@@ -155,7 +154,7 @@ class Idler(object):
                 global M
                 M = new_conn
                 try:
-                    self.dosync2()
+                    self.dosync()
                 except Exception as e:
                     print(
                         f"Another error occurred while fetching MFA code after reconnecting: {e}\n\nWill retry again later.")
