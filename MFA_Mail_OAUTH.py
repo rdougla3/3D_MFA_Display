@@ -14,6 +14,8 @@ endpoint = "https://test.com"
 
 def callback(message: pubsub_v1.subscriber.message.Message) -> None:
     print(f"Received {message}.")
+    time = message.publish_time
+    full_email = gmail.users().messages().list(userId="me", maxResults=1).execute()
     message.ack()
 
 def main():
