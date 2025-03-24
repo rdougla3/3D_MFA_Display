@@ -125,17 +125,22 @@ def print_notifications():
     GREEN = '\033[92m'
     RESET = '\033[0m'
     os.system('cls' if os.name == 'nt' else 'clear')
+    # Coalesce
+    for notification in notificationStack.stack:
+        any_mach = len(list(filter(lambda n: n.id == notification.id, notificationStack.stack))) > 1
+        if any_mach:
+            notificationStack.stack.remove(notification)
     print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*\n")
     for notification in notificationStack.stack:
-        # Pop old and/or repeated notifications
+        # Pop old notifications
         mins_old = (datetime.now(timezone.utc) - notification.time).total_seconds() / 60
-        any_mach = len(list(filter(lambda n: n.id == notification.id, notificationStack.stack))) > 1
-        if mins_old > CODE_DURATION or any_mach:
+        if mins_old > CODE_DURATION:
             notificationStack.remove(notification)
 
         else:
             color = GREEN if mins_old < 2 else YELLOW if mins_old < 4 else RED
             print("\n Code: ", notification.code, "\t\tTime: ", f"{color}{datetime.strftime(notification.time, '%H:%M %B %d %Y')}{RESET}","\n\n")
+
     print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*\n")
 
 if __name__=="__main__":
