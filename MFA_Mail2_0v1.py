@@ -62,8 +62,8 @@ class FixedStack:
         self.stack.append(data)
         if len(self.stack) > STACK_SIZE:
             self.stack.reverse(); self.stack.pop(); self.stack.reverse()
-    def pop(self):
-        return self.stack.pop()
+    def remove(self, notification):
+        return self.stack.remove(notification)
 
 notificationStack = FixedStack([])
 
@@ -143,7 +143,7 @@ class Idler(object):
     # needing duplicate error handling logic.
     def dosync_wrapper(self):
         try:
-            self.dosync()
+            self.dosync2()
         except (imaplib2.IMAP4.abort, imaplib2.IMAP4.error, socket.error) as conn_error:
             print(f"Error occurred while fetching MFA code from email: {conn_error}")
             print("Attempting to reconnect...")
@@ -154,7 +154,7 @@ class Idler(object):
                 global M
                 M = new_conn
                 try:
-                    self.dosync()
+                    self.dosync2()
                 except Exception as e:
                     print(
                         f"Another error occurred while fetching MFA code after reconnecting: {e}\n\nWill retry again later.")
@@ -175,6 +175,7 @@ class Idler(object):
                 resp_code, mail_data = M.fetch(mail_id, '(RFC822)')
                 messages = email.message_from_bytes(mail_data[0][1]).as_string()
                 message = messages.split("Content-Type: text/plain").pop()
+                message = " ".join(strip_html(message).split())
             except:
                 #message not ready. This shouldn't throw loops, but we can add a break condition
                 time.sleep(1)
@@ -187,14 +188,13 @@ class Idler(object):
             date = re.search("(\\d|\\d\\d)\\s+[A-Za-z]a[A-Za-z]\\s+[0-9]+\\s+(\\d|\\d\\d):(\\d|\\d\\d):(\\d|\\d\\d)\\s-\\d\\d\\d\\d", message).group()
             t: time = time.strptime(date, "%d %b %Y %H:%M:%S %z")
 
-            body = re.search('Welcome to Bambu Lab,\\n([\\s\\S]*)\\nBambu Lab', message).group()
-            text  = " ".join(strip_html(body).split())
+            body = re.search('Welcome to Bambu Lab([\\s\\S]*)Bambu Lab', message).group()
 
             #Push to notification stack if newer than 5 minutes
             dt = datetime(t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
             mins_old = (datetime.now() - dt).total_seconds() / 60
             if mins_old < CODE_DURATION:
-                notificationStack.push(Notification(mail_id, t, code, text))
+                notificationStack.push(Notification(mail_id, t, code, body))
 
             print_notifications()
 
@@ -212,7 +212,7 @@ def print_notifications():
         dt = datetime(t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
         mins_old = (datetime.now() - dt).total_seconds() / 60
         if mins_old > CODE_DURATION:
-            notificationStack.pop()
+            notificationStack.remove(notification)
 
         else:
             color = GREEN if mins_old < 2 else YELLOW if mins_old < 4 else RED
