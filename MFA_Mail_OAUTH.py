@@ -1,4 +1,10 @@
+import base64
 import os
+import re
+import time
+from datetime import datetime, timedelta, timezone
+from typing import List
+
 from google.cloud import pubsub_v1
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -10,12 +16,56 @@ PROJECT_ID = 'bambu-mfa-with-oauth'
 TOPIC_ID = 'bambu-mfa-emails'
 SUBSCRIPTION_ID = 'bambu-mfa-emails-sub'
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
-endpoint = "https://test.com"
+
+STACK_SIZE = 5
+CODE_DURATION = 5
+
+class Notification:
+    id: str
+    time: time
+    code: int
+    body: str
+    def __init__(self, id_=None, time_=None, code_=None, body_=None):
+        self.id = id_
+        self.time = time_
+        self.code = code_
+        self.body = body_
+
+class FixedStack:
+    stack: List[Notification]
+    def __init__(self, stack):
+        self.stack = []
+    def push(self, data: Notification):
+        self.stack.append(data)
+        if len(self.stack) > STACK_SIZE:
+            self.stack.reverse(); self.stack.pop(); self.stack.reverse()
+    def remove(self, notification):
+        return self.stack.remove(notification)
+
+notificationStack = FixedStack([])
 
 def callback(message: pubsub_v1.subscriber.message.Message) -> None:
     print(f"Received {message}.")
-    time = message.publish_time
-    full_email = gmail.users().messages().list(userId="me", maxResults=1).execute()
+    t = message.publish_time
+
+    try:
+        result = gmail.users().messages().list(userId="me", maxResults=1).execute()
+        mail_id = result.get('messages').pop().get('id')
+        raw = gmail.users().messages().get(userId="me", id=mail_id, format='raw').execute()
+        body = raw.get('snippet')
+
+        codeStr = re.search("Your verification code is: \\d\\d\\d\\d\\d\\d", body).group()
+        code = re.search("\\d\\d\\d\\d\\d\\d", codeStr).group()
+
+        mins_old = (datetime.now(timezone.utc) - t).total_seconds() / 60
+        notification = Notification(mail_id, t, code, body)
+        if mins_old < CODE_DURATION:
+            notificationStack.push(Notification(mail_id, t, code, body))
+            print_notifications()
+
+    except:
+        pass
+
     message.ack()
 
 def main():
@@ -27,7 +77,7 @@ def main():
     streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
     print(f"Listening for messages on {subscription_path}..\n")
 
-    #This is our loop, which calls callback whenever there is a push notification for an email.
+    # This is our loop, which calls callback() whenever there is a push notification for an email.
     with subscriber:
         try:
             # When `timeout` is not set, result() will block indefinitely,
@@ -67,6 +117,26 @@ def connect_oauth():
 
     except HttpError as error:
         print(f"An error occurred: {error}")
+
+
+def print_notifications():
+    RED = '\033[91m'
+    YELLOW = '\033[33m'
+    GREEN = '\033[92m'
+    RESET = '\033[0m'
+    os.system('cls' if os.name == 'nt' else 'clear')
+    print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*\n")
+    for notification in notificationStack.stack:
+        # Pop old and/or repeated notifications
+        mins_old = (datetime.now(timezone.utc) - notification.time).total_seconds() / 60
+        any_mach = len(list(filter(lambda n: n.id == notification.id, notificationStack.stack))) > 1
+        if mins_old > CODE_DURATION or any_mach:
+            notificationStack.remove(notification)
+
+        else:
+            color = GREEN if mins_old < 2 else YELLOW if mins_old < 4 else RED
+            print("\n Code: ", notification.code, "\t\tTime: ", f"{color}{datetime.strftime(notification.time, '%H:%M %B %d %Y')}{RESET}","\n\n")
+    print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*\n")
 
 if __name__=="__main__":
     main()
