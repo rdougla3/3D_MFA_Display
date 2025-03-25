@@ -45,7 +45,7 @@ class FixedStack:
 notificationStack = FixedStack([])
 
 def callback(message: pubsub_v1.subscriber.message.Message) -> None:
-    print(f"Received {message}.")
+    #print(f"Received {message}.")
     t = message.publish_time
 
     try:
@@ -58,7 +58,6 @@ def callback(message: pubsub_v1.subscriber.message.Message) -> None:
         code = re.search("\\d\\d\\d\\d\\d\\d", codeStr).group()
 
         mins_old = (datetime.now(timezone.utc) - t).total_seconds() / 60
-        notification = Notification(mail_id, t, code, body)
         if mins_old < CODE_DURATION:
             notificationStack.push(Notification(mail_id, t, code, body))
             print_notifications()
