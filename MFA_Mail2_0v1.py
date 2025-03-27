@@ -5,6 +5,7 @@
 #
 #   OZINDFW Rich Osman 30 Nov 24 for Dallas Makerspace 3D
 #
+from zoneinfo import ZoneInfo
 
 import imaplib2
 import time
@@ -16,8 +17,10 @@ import socket
 import os
 from html.parser import HTMLParser
 import re
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import List
+
+import pytz
 
 # Configurable delay and max timeout between reconnection attempts if network fails or IMAP server disconnects
 RETRY_DELAY_SECONDS = 30
@@ -173,26 +176,27 @@ class Idler(object):
 
             try:
                 resp_code, mail_data = M.fetch(mail_id, '(RFC822)')
-                messages = email.message_from_bytes(mail_data[0][1]).as_string()
-                message = messages.split("Content-Type: text/plain").pop()
+                message = email.message_from_bytes(mail_data[0][1]).as_string()
                 message = " ".join(strip_html(message).split())
             except:
                 #message not ready. This shouldn't throw loops, but we can add a break condition
                 time.sleep(1)
                 return self.dosync2()
 
-            #Parse code, time body...
             codeStr = re.search("Your verification code is:\\s+\\d\\d\\d\\d\\d\\d", message).group()
             code = re.search("\\d\\d\\d\\d\\d\\d", codeStr).group()
 
-            date = re.search("(\\d|\\d\\d)\\s+[A-Za-z]a[A-Za-z]\\s+[0-9]+\\s+(\\d|\\d\\d):(\\d|\\d\\d):(\\d|\\d\\d)\\s-\\d\\d\\d\\d", message).group()
+            #Parse delivery date, not any date...
+            dateStr = re.search("Delivery-date: [A-Za-z][A-Za-z][A-Za-z], \\d\\d\\s[A-Za-z][A-Za-z][A-Za-z]\\s\\d\\d\\d\\d\\s\\d\\d:\\d\\d:\\d\\d\\s-\\d\\d\\d\\d", message).group()
+            date = re.search("\\d\\d\\s[A-Za-z][A-Za-z][A-Za-z]\\s\\d\\d\\d\\d\\s\\d\\d:\\d\\d:\\d\\d\\s-\\d\\d\\d\\d", dateStr).group()
             t: time = time.strptime(date, "%d %b %Y %H:%M:%S %z")
 
             body = re.search('Welcome to Bambu Lab([\\s\\S]*)Bambu Lab', message).group()
 
             #Push to notification stack if newer than 5 minutes
             dt = datetime(t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
-            mins_old = (datetime.now() - dt).total_seconds() / 60
+            dt_est = pytz.timezone('US/Eastern').localize(dt).astimezone(pytz.timezone('US/Central'))
+            mins_old = (datetime.now() - dt_est.replace(tzinfo=None)).total_seconds() / 60
             if mins_old < CODE_DURATION:
                 notificationStack.push(Notification(mail_id, t, code, body))
 
