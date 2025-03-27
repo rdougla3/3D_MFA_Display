@@ -90,6 +90,7 @@ def main():
 
 def connect_oauth():
     creds = None
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "application_default_credentials.json"
     # The file token.json stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
     # time.
@@ -100,6 +101,9 @@ def connect_oauth():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
+            if(not os.path.exists("credentials.json")):
+                print("No client secret found. Add credentials.json to root directory")
+                time.sleep(10)
             flow = InstalledAppFlow.from_client_secrets_file(
                 "credentials.json", SCOPES
             )
