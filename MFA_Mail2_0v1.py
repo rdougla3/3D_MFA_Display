@@ -210,7 +210,7 @@ def print_notifications():
     for notification in notificationStack.stack:
 
         # Pop old notifications
-        mins_old = (datetime.now(pytz.timezone("US/Central")) - notification.time(tzinfo=None)).total_seconds() / 60
+        mins_old = (datetime.now(pytz.timezone("US/Central")) - notification.time).total_seconds() / 60
         if mins_old > CODE_DURATION:
             notificationStack.remove(notification)
 
