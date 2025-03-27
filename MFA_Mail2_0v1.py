@@ -182,22 +182,21 @@ class Idler(object):
                 time.sleep(1)
                 return self.dosync2()
 
+            body = re.search('Welcome to Bambu Lab([\\s\\S]*)Bambu Lab', message).group()
+
             codeStr = re.search("Your verification code is:\\s+\\d\\d\\d\\d\\d\\d", message).group()
             code = re.search("\\d\\d\\d\\d\\d\\d", codeStr).group()
 
             #Parse delivery date, not any date...
             dateStr = re.search("Delivery-date: [A-Za-z][A-Za-z][A-Za-z], \\d\\d\\s[A-Za-z][A-Za-z][A-Za-z]\\s\\d\\d\\d\\d\\s\\d\\d:\\d\\d:\\d\\d\\s-\\d\\d\\d\\d", message).group()
             date = re.search("\\d\\d\\s[A-Za-z][A-Za-z][A-Za-z]\\s\\d\\d\\d\\d\\s\\d\\d:\\d\\d:\\d\\d\\s-\\d\\d\\d\\d", dateStr).group()
+
             t: time = time.strptime(date, "%d %b %Y %H:%M:%S %z")
+            localized_time = datetime(*t[:6], tzinfo=pytz.FixedOffset(t.tm_gmtoff // 60))
+            mins_old = (datetime.now(pytz.timezone("US/Central")) - localized_time).total_seconds() / 60
 
-            body = re.search('Welcome to Bambu Lab([\\s\\S]*)Bambu Lab', message).group()
-
-            #Push to notification stack if newer than 5 minutes
-            dt = datetime(t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
-            dt_central = pytz.timezone('US/Eastern').localize(dt).astimezone(pytz.timezone('US/Central'))
-            mins_old = (datetime.now() - dt_central.replace(tzinfo=None)).total_seconds() / 60
             if mins_old < CODE_DURATION:
-                notificationStack.push(Notification(mail_id, dt_central, code, body))
+                notificationStack.push(Notification(mail_id, localized_time, code, body))
 
             print_notifications()
 
@@ -211,7 +210,7 @@ def print_notifications():
     for notification in notificationStack.stack:
 
         # Pop old notifications
-        mins_old = (datetime.now() - notification.time.replace(tzinfo=None)).total_seconds() / 60
+        mins_old = (datetime.now(pytz.timezone("US/Central")) - notification.time(tzinfo=None)).total_seconds() / 60
         if mins_old > CODE_DURATION:
             notificationStack.remove(notification)
 
