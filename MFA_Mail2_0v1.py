@@ -5,7 +5,6 @@
 #
 #   OZINDFW Rich Osman 30 Nov 24 for Dallas Makerspace 3D
 #
-from zoneinfo import ZoneInfo
 
 import imaplib2
 import time
@@ -17,7 +16,7 @@ import socket
 import os
 from html.parser import HTMLParser
 import re
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from typing import List
 
 import pytz
@@ -195,10 +194,10 @@ class Idler(object):
 
             #Push to notification stack if newer than 5 minutes
             dt = datetime(t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
-            dt_est = pytz.timezone('US/Eastern').localize(dt).astimezone(pytz.timezone('US/Central'))
-            mins_old = (datetime.now() - dt_est.replace(tzinfo=None)).total_seconds() / 60
+            dt_central = pytz.timezone('US/Eastern').localize(dt).astimezone(pytz.timezone('US/Central'))
+            mins_old = (datetime.now() - dt_central.replace(tzinfo=None)).total_seconds() / 60
             if mins_old < CODE_DURATION:
-                notificationStack.push(Notification(mail_id, t, code, body))
+                notificationStack.push(Notification(mail_id, dt_central, code, body))
 
             print_notifications()
 
@@ -212,9 +211,7 @@ def print_notifications():
     for notification in notificationStack.stack:
 
         # Pop old notifications
-        t = notification.time
-        dt = datetime(t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
-        mins_old = (datetime.now() - dt).total_seconds() / 60
+        mins_old = (datetime.now() - notification.time.replace(tzinfo=None)).total_seconds() / 60
         if mins_old > CODE_DURATION:
             notificationStack.remove(notification)
 
