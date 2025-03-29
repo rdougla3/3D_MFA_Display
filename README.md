@@ -7,6 +7,6 @@ The imaplib2 is on PyPi and the docs are (currently) here: https://imaplib2.read
 Displays 5 most recent codes, color coding them for expiration 
 * GREEN = recent
 * YELLOW = aging
-* RED under a minute to expiration
+* RED = under a minute to expiration
 * blanks those no longer valid.
 
