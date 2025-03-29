@@ -27,3 +27,10 @@ The inataller must establish a virtual enviroment for the application and instal
 * imaplib2 (if using an IMAP host server)
 * pytz
 
+You'll also probably want to increase the size of text on the display.  Edit /etc/default/console-setup and add:
+...
+CHARMAP="UTF-8"
+CODESET="Lat7"
+FONTFACE="Terminus"
+FONTSIZE="28x14"
+...
