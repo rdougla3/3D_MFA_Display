@@ -19,6 +19,8 @@ import re
 from datetime import datetime
 from typing import List
 
+import pytz
+
 # Configurable delay and max timeout between reconnection attempts if network fails or IMAP server disconnects
 RETRY_DELAY_SECONDS = 30
 MAX_RETRIES = 20
@@ -173,30 +175,35 @@ class Idler(object):
 
             try:
                 resp_code, mail_data = M.fetch(mail_id, '(RFC822)')
-                messages = email.message_from_bytes(mail_data[0][1]).as_string()
-                message = messages.split("Content-Type: text/plain").pop()
+                message = email.message_from_bytes(mail_data[0][1]).as_string()
                 message = " ".join(strip_html(message).split())
             except:
-                #message not ready. This shouldn't throw loops, but we can add a break condition
+                # Message not ready. Try again in a second.
+                # Shouldn't throw loops, but we can add a break condition.
                 time.sleep(1)
                 return self.dosync2()
 
-            #Parse code, time body...
-            codeStr = re.search("Your verification code is:\\s+\\d\\d\\d\\d\\d\\d", message).group()
-            code = re.search("\\d\\d\\d\\d\\d\\d", codeStr).group()
+            try:
+                body = re.search('Welcome to Bambu Lab([\\s\\S]*)Bambu Lab', message).group()
 
-            date = re.search("(\\d|\\d\\d)\\s+[A-Za-z]a[A-Za-z]\\s+[0-9]+\\s+(\\d|\\d\\d):(\\d|\\d\\d):(\\d|\\d\\d)\\s-\\d\\d\\d\\d", message).group()
-            t: time = time.strptime(date, "%d %b %Y %H:%M:%S %z")
+                codeStr = re.search("Your verification code is:\\s+\\d\\d\\d\\d\\d\\d", message).group()
+                code = re.search("\\d\\d\\d\\d\\d\\d", codeStr).group()
 
-            body = re.search('Welcome to Bambu Lab([\\s\\S]*)Bambu Lab', message).group()
+                #Parse delivery date, not any date...
+                dateStr = re.search("Delivery-date: [A-Za-z][A-Za-z][A-Za-z], \\d\\d\\s[A-Za-z][A-Za-z][A-Za-z]\\s\\d\\d\\d\\d\\s\\d\\d:\\d\\d:\\d\\d\\s-\\d\\d\\d\\d", message).group()
+                date = re.search("\\d\\d\\s[A-Za-z][A-Za-z][A-Za-z]\\s\\d\\d\\d\\d\\s\\d\\d:\\d\\d:\\d\\d\\s-\\d\\d\\d\\d", dateStr).group()
 
-            #Push to notification stack if newer than 5 minutes
-            dt = datetime(t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
-            mins_old = (datetime.now() - dt).total_seconds() / 60
-            if mins_old < CODE_DURATION:
-                notificationStack.push(Notification(mail_id, t, code, body))
+                t: time = time.strptime(date, "%d %b %Y %H:%M:%S %z")
+                localized_time = datetime(*t[:6], tzinfo=pytz.FixedOffset(t.tm_gmtoff // 60))
+                mins_old = (datetime.now(pytz.timezone("US/Central")) - localized_time).total_seconds() / 60
 
-            print_notifications()
+                if mins_old < CODE_DURATION:
+                    notificationStack.push(Notification(mail_id, localized_time, code, body))
+
+                print_notifications()
+            except:
+                #message not matching format. Discard.
+                pass
 
 def print_notifications():
     RED = '\033[91m'
@@ -208,15 +215,13 @@ def print_notifications():
     for notification in notificationStack.stack:
 
         # Pop old notifications
-        t = notification.time
-        dt = datetime(t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
-        mins_old = (datetime.now() - dt).total_seconds() / 60
+        mins_old = (datetime.now(pytz.timezone("US/Central")) - notification.time).total_seconds() / 60
         if mins_old > CODE_DURATION:
             notificationStack.remove(notification)
 
         else:
             color = GREEN if mins_old < 2 else YELLOW if mins_old < 4 else RED
-            print("\n Code: ", notification.code, "\t\tTime: ", f"{color}{time.strftime('%H:%M %B %d %Y', notification.time)}{RESET}",
+            print("\n Code: ", notification.code, "\t\tTime: ", f"{color}{datetime.strftime(notification.time.astimezone(pytz.timezone('US/Central')), '%H:%M %B %d %Y')}{RESET}",
                   "\n\n")
     print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*\n")
 
