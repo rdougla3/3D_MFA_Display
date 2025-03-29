@@ -1,10 +1,10 @@
-import base64
 import os
 import re
+import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import List
-
+import pytz
 from google.cloud import pubsub_v1
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -76,6 +76,9 @@ def main():
     streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
     print(f"Listening for messages on {subscription_path}..\n")
 
+    # Async task to refresh display
+    threading.Thread(target=screensaver, daemon=True).start()
+
     # This is our loop, which calls callback() whenever there is a push notification for an email.
     with subscriber:
         try:
@@ -122,6 +125,11 @@ def connect_oauth():
         print(f"An error occurred: {error}")
 
 
+def screensaver():
+    while True:
+        time.sleep(60)
+        print_notifications()
+
 def print_notifications():
     RED = '\033[91m'
     YELLOW = '\033[33m'
@@ -137,7 +145,7 @@ def print_notifications():
 
         else:
             color = GREEN if mins_old < 2 else YELLOW if mins_old < 4 else RED
-            print("\n Code: ", notification.code, "\t\tTime: ", f"{color}{datetime.strftime(notification.time, '%H:%M %B %d %Y')}{RESET}","\n\n")
+            print("\n Code: ", notification.code, "\t\tTime: ", f"{color}{datetime.strftime(notification.time.astimezone(pytz.timezone('US/Central')), '%I:%M %p %B %d %Y')}{RESET}","\n\n")
 
     print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*\n")
 
