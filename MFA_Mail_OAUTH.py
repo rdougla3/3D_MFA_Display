@@ -47,10 +47,12 @@ notificationStack = FixedStack([])
 def callback(message: pubsub_v1.subscriber.message.Message) -> None:
     #print(f"Received {message}.")
     t = message.publish_time
+    message.ack()
 
     try:
         result = gmail.users().messages().list(userId="me", maxResults=1).execute()
         mail_id = result.get('messages').pop().get('id')
+        if any(notification.id == mail_id for notification in notificationStack.stack): raise
         raw = gmail.users().messages().get(userId="me", id=mail_id, format='raw').execute()
         body = raw.get('snippet')
 
@@ -64,8 +66,6 @@ def callback(message: pubsub_v1.subscriber.message.Message) -> None:
 
     except:
         pass
-
-    message.ack()
 
 def main():
     connect_oauth()
@@ -128,11 +128,6 @@ def print_notifications():
     GREEN = '\033[92m'
     RESET = '\033[0m'
     os.system('cls' if os.name == 'nt' else 'clear')
-    # Coalesce
-    for notification in notificationStack.stack:
-        any_mach = len(list(filter(lambda n: n.id == notification.id, notificationStack.stack))) > 1
-        if any_mach:
-            notificationStack.stack.remove(notification)
     print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*\n")
     for notification in notificationStack.stack:
         # Pop old notifications
