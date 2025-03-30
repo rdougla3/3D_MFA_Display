@@ -15,7 +15,10 @@ from googleapiclient.errors import HttpError
 PROJECT_ID = 'bambu-mfa-with-oauth'
 TOPIC_ID = 'bambu-mfa-emails'
 SUBSCRIPTION_ID = 'bambu-mfa-emails-sub'
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/cloud-platform"
+]
 
 STACK_SIZE = 5
 CODE_DURATION = 5
@@ -68,9 +71,8 @@ def callback(message: pubsub_v1.subscriber.message.Message) -> None:
         pass
 
 def main():
-    connect_oauth()
-
-    subscriber = pubsub_v1.SubscriberClient()
+    creds = connect_oauth()
+    subscriber = pubsub_v1.SubscriberClient(credentials=creds)
     subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_ID)
 
     streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
@@ -93,7 +95,6 @@ def main():
 
 def connect_oauth():
     creds = None
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "application_default_credentials.json"
     # The file token.json stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
     # time.
@@ -104,13 +105,18 @@ def connect_oauth():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            if(not os.path.exists("credentials.json")):
+            if not os.path.exists("credentials.json"):
                 print("No client secret found. Add credentials.json to root directory")
                 time.sleep(10)
-            flow = InstalledAppFlow.from_client_secrets_file(
-                "credentials.json", SCOPES
-            )
-            creds = flow.run_local_server(port=0)
+            # Provide consent using another signed-in device
+            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+            flow.redirect_uri = 'urn:ietf:wg:oauth:2.0:oob'
+            auth_url, _ = flow.authorization_url(prompt="consent")
+            print(f"Please go to this URL and authorize access:\n{auth_url}")
+            code = input("Enter the authorization code: ").strip()
+            flow.fetch_token(code=code)
+            creds = flow.credentials
+
         # Save the credentials for the next run
         with open("token.json", "w") as token:
             token.write(creds.to_json())
@@ -124,6 +130,7 @@ def connect_oauth():
     except HttpError as error:
         print(f"An error occurred: {error}")
 
+    return creds
 
 def screensaver():
     while True:
