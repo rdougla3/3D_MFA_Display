@@ -1,0 +1,36 @@
+#
+#  29 March 2025  OZINDFW
+#
+
+This is a work in progress.  Well, that's actually generous.  This needs work, and it gets it as someone has enough enough time and motivation to improve it.  
+
+There are two versions.  
+One works against an IMAP server that supports push IMAP notifcation so that we aren't polling the server continuously. 
+The other works against a GMAIL account, supporting the unique GMAIL API and OAuth
+
+The DMS system runs on a Raspberry PI ZeroW.  It doesn't need much compute.  It's operating as the default console application and relies on auto-login.  
+
+The bash script needs to be modified to call MFA_Mail_Start.sh y appending  
+...
+sleep 30
+./MFA_Mail_Start.sh $
+...
+to .bashrc and setting MFA_Mail_Start.sh as executable (mod 755) The 30 second delay is to ensure that the network is up and stable before attepting to start the application.
+
+MFA_Mail_Start.sh 
+
+* insures that the application is running and restarts it if not.
+* Logs each start
+* sets up the virtual environment required by Rasperry PI OS for libraries not maintained by Debian
+
+The inataller must establish a virtual enviroment for the application and install the following libraries
+* imaplib2 (if using an IMAP host server)
+* pytz
+
+You'll also probably want to increase the size of text on the display.  Edit /etc/default/console-setup and add:
+...
+CHARMAP="UTF-8"
+CODESET="Lat7"
+FONTFACE="Terminus"
+FONTSIZE="28x14"
+...
