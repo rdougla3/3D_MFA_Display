@@ -74,6 +74,7 @@ def main():
     creds = connect_oauth()
     subscriber = pubsub_v1.SubscriberClient(credentials=creds)
     subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_ID)
+    rewatch_inbox()
 
     streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
     print(f"Listening for messages on {subscription_path}..\n")
@@ -132,6 +133,16 @@ def connect_oauth():
 
     return creds
 
+def rewatch_inbox():
+    response = gmail.users().watch(
+        userId="me",
+        body={
+            "topicName": f"projects/{PROJECT_ID}/topics/{TOPIC_ID}",
+            "labelIds": ["INBOX"]  # Or use [] to watch all messages
+        }
+    ).execute()
+    print("Watch response:", response)
+
 def screensaver():
     while True:
         time.sleep(60)
@@ -143,7 +154,8 @@ def print_notifications():
     GREEN = '\033[92m'
     RESET = '\033[0m'
     os.system('cls' if os.name == 'nt' else 'clear')
-    print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*\n")
+    print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-* OAUTH\n")
+    print(f"Last updated at: {datetime.now(pytz.timezone('US/Central')).strftime('%I:%M %p %B %d %Y')}\n")
     for notification in notificationStack.stack:
         # Pop old notifications
         mins_old = (datetime.now(timezone.utc) - notification.time).total_seconds() / 60
