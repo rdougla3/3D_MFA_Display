@@ -1,10 +1,10 @@
-import base64
 import os
 import re
+import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import List
-
+import pytz
 from google.cloud import pubsub_v1
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -15,7 +15,10 @@ from googleapiclient.errors import HttpError
 PROJECT_ID = 'bambu-mfa-with-oauth'
 TOPIC_ID = 'bambu-mfa-emails'
 SUBSCRIPTION_ID = 'bambu-mfa-emails-sub'
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/cloud-platform"
+]
 
 STACK_SIZE = 5
 CODE_DURATION = 5
@@ -47,10 +50,12 @@ notificationStack = FixedStack([])
 def callback(message: pubsub_v1.subscriber.message.Message) -> None:
     #print(f"Received {message}.")
     t = message.publish_time
+    message.ack()
 
     try:
         result = gmail.users().messages().list(userId="me", maxResults=1).execute()
         mail_id = result.get('messages').pop().get('id')
+        if any(notification.id == mail_id for notification in notificationStack.stack): raise
         raw = gmail.users().messages().get(userId="me", id=mail_id, format='raw').execute()
         body = raw.get('snippet')
 
@@ -65,16 +70,17 @@ def callback(message: pubsub_v1.subscriber.message.Message) -> None:
     except:
         pass
 
-    message.ack()
-
 def main():
-    connect_oauth()
-
-    subscriber = pubsub_v1.SubscriberClient()
+    creds = connect_oauth()
+    subscriber = pubsub_v1.SubscriberClient(credentials=creds)
     subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_ID)
+    rewatch_inbox()
 
     streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
     print(f"Listening for messages on {subscription_path}..\n")
+
+    # Async task to refresh display
+    threading.Thread(target=screensaver, daemon=True).start()
 
     # This is our loop, which calls callback() whenever there is a push notification for an email.
     with subscriber:
@@ -90,7 +96,6 @@ def main():
 
 def connect_oauth():
     creds = None
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "application_default_credentials.json"
     # The file token.json stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
     # time.
@@ -101,13 +106,18 @@ def connect_oauth():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            if(not os.path.exists("credentials.json")):
+            if not os.path.exists("credentials.json"):
                 print("No client secret found. Add credentials.json to root directory")
                 time.sleep(10)
-            flow = InstalledAppFlow.from_client_secrets_file(
-                "credentials.json", SCOPES
-            )
-            creds = flow.run_local_server(port=0)
+            # Provide consent using another signed-in device
+            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+            flow.redirect_uri = 'urn:ietf:wg:oauth:2.0:oob'
+            auth_url, _ = flow.authorization_url(prompt="consent")
+            print(f"Please go to this URL and authorize access:\n{auth_url}")
+            code = input("Enter the authorization code: ").strip()
+            flow.fetch_token(code=code)
+            creds = flow.credentials
+
         # Save the credentials for the next run
         with open("token.json", "w") as token:
             token.write(creds.to_json())
@@ -121,6 +131,22 @@ def connect_oauth():
     except HttpError as error:
         print(f"An error occurred: {error}")
 
+    return creds
+
+def rewatch_inbox():
+    response = gmail.users().watch(
+        userId="me",
+        body={
+            "topicName": f"projects/{PROJECT_ID}/topics/{TOPIC_ID}",
+            "labelIds": ["INBOX"]  # Or use [] to watch all messages
+        }
+    ).execute()
+    print("Watch response:", response)
+
+def screensaver():
+    while True:
+        time.sleep(60)
+        print_notifications()
 
 def print_notifications():
     RED = '\033[91m'
@@ -128,12 +154,8 @@ def print_notifications():
     GREEN = '\033[92m'
     RESET = '\033[0m'
     os.system('cls' if os.name == 'nt' else 'clear')
-    # Coalesce
-    for notification in notificationStack.stack:
-        any_mach = len(list(filter(lambda n: n.id == notification.id, notificationStack.stack))) > 1
-        if any_mach:
-            notificationStack.stack.remove(notification)
-    print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*\n")
+    print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-* OAUTH\n")
+    print(f"Last updated at: {datetime.now(pytz.timezone('US/Central')).strftime('%I:%M %p %B %d %Y')}\n")
     for notification in notificationStack.stack:
         # Pop old notifications
         mins_old = (datetime.now(timezone.utc) - notification.time).total_seconds() / 60
@@ -142,7 +164,7 @@ def print_notifications():
 
         else:
             color = GREEN if mins_old < 2 else YELLOW if mins_old < 4 else RED
-            print("\n Code: ", notification.code, "\t\tTime: ", f"{color}{datetime.strftime(notification.time, '%H:%M %B %d %Y')}{RESET}","\n\n")
+            print("\n Code: ", notification.code, "\t\tTime: ", f"{color}{datetime.strftime(notification.time.astimezone(pytz.timezone('US/Central')), '%I:%M %p %B %d %Y')}{RESET}","\n\n")
 
     print("\n\n\n\n\n\n\n\n+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*+=-*\n")
 
