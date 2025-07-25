@@ -133,6 +133,7 @@ def connect_oauth():
 
     return creds
 
+expiration_date = datetime.now()
 def rewatch_inbox():
     response = gmail.users().watch(
         userId="me",
@@ -141,12 +142,18 @@ def rewatch_inbox():
             "labelIds": ["INBOX"]  # Or use [] to watch all messages
         }
     ).execute()
+    global expiration_date
+    expiration_date = datetime.fromtimestamp(int(response["expiration"]) / 1000)
     print("Watch response:", response)
 
 def screensaver():
     while True:
         time.sleep(60)
         print_notifications()
+        global expiration_date
+        remainingDays = (expiration_date - datetime.now()).days
+        if(remainingDays <= 1):
+            rewatch_inbox()
 
 def print_notifications():
     RED = '\033[91m'
